@@ -1,0 +1,693 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>CNC Electric — Business Assistant</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=Syne:wght@400;600;700;800&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #0a0c0f;
+    --surface: #111418;
+    --surface2: #181c22;
+    --border: #1e252f;
+    --accent: #00d4ff;
+    --accent2: #ff6b35;
+    --text: #e2e8f0;
+    --text-dim: #64748b;
+    --text-muted: #334155;
+    --user-bg: #003d4d;
+    --bot-bg: #111418;
+    --green: #22c55e;
+    --yellow: #eab308;
+    --red: #ef4444;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Syne', sans-serif;
+    height: 100vh;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+
+  /* Animated grid background */
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background-image:
+      linear-gradient(rgba(0,212,255,0.03) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(0,212,255,0.03) 1px, transparent 1px);
+    background-size: 40px 40px;
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  /* Header */
+  header {
+    position: relative;
+    z-index: 10;
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+    padding: 14px 24px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+
+  .logo-group {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+  }
+
+  .logo-icon {
+    width: 38px;
+    height: 38px;
+    background: linear-gradient(135deg, var(--accent), #0088aa);
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 18px;
+    flex-shrink: 0;
+  }
+
+  .logo-text {
+    display: flex;
+    flex-direction: column;
+  }
+
+  .logo-text h1 {
+    font-size: 15px;
+    font-weight: 800;
+    letter-spacing: 0.05em;
+    color: var(--text);
+    line-height: 1;
+  }
+
+  .logo-text span {
+    font-size: 11px;
+    color: var(--accent);
+    font-family: 'IBM Plex Mono', monospace;
+    font-weight: 400;
+    letter-spacing: 0.1em;
+    margin-top: 2px;
+  }
+
+  .header-badges {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+  }
+
+  .badge {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 10px;
+    padding: 4px 10px;
+    border-radius: 4px;
+    border: 1px solid;
+    letter-spacing: 0.05em;
+    display: flex;
+    align-items: center;
+    gap: 5px;
+  }
+
+  .badge.live { border-color: var(--green); color: var(--green); background: rgba(34,197,94,0.08); }
+  .badge.shopify { border-color: #96bf48; color: #96bf48; background: rgba(150,191,72,0.08); }
+  .badge.meta { border-color: #1877f2; color: #1877f2; background: rgba(24,119,242,0.08); }
+  .badge .dot { width: 5px; height: 5px; border-radius: 50%; background: currentColor; animation: pulse 2s infinite; }
+
+  @keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.3; }
+  }
+
+  /* Stats bar */
+  #stats-bar {
+    position: relative;
+    z-index: 9;
+    background: var(--surface2);
+    border-bottom: 1px solid var(--border);
+    padding: 10px 24px;
+    display: flex;
+    gap: 24px;
+    overflow-x: auto;
+    transition: all 0.3s;
+  }
+
+  #stats-bar::-webkit-scrollbar { display: none; }
+
+  .stat-item {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    flex-shrink: 0;
+  }
+
+  .stat-label {
+    font-size: 9px;
+    color: var(--text-dim);
+    font-family: 'IBM Plex Mono', monospace;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+  }
+
+  .stat-value {
+    font-size: 14px;
+    font-weight: 700;
+    color: var(--text);
+  }
+
+  .stat-value.accent { color: var(--accent); }
+  .stat-value.green { color: var(--green); }
+  .stat-value.yellow { color: var(--yellow); }
+
+  .stat-divider {
+    width: 1px;
+    background: var(--border);
+    margin: 2px 0;
+    flex-shrink: 0;
+  }
+
+  /* Chat area */
+  #chat-area {
+    position: relative;
+    z-index: 1;
+    flex: 1;
+    overflow-y: auto;
+    padding: 24px;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+  }
+
+  #chat-area::-webkit-scrollbar { width: 4px; }
+  #chat-area::-webkit-scrollbar-track { background: transparent; }
+  #chat-area::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+
+  /* Welcome state */
+  .welcome-screen {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 40px 20px;
+    text-align: center;
+    gap: 20px;
+  }
+
+  .welcome-icon {
+    width: 64px;
+    height: 64px;
+    background: linear-gradient(135deg, rgba(0,212,255,0.2), rgba(0,212,255,0.05));
+    border: 1px solid rgba(0,212,255,0.3);
+    border-radius: 16px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 28px;
+  }
+
+  .welcome-title {
+    font-size: 22px;
+    font-weight: 800;
+    color: var(--text);
+  }
+
+  .welcome-sub {
+    font-size: 13px;
+    color: var(--text-dim);
+    max-width: 360px;
+    line-height: 1.6;
+  }
+
+  .quick-prompts {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    justify-content: center;
+    max-width: 560px;
+  }
+
+  .quick-btn {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    color: var(--text-dim);
+    padding: 8px 14px;
+    border-radius: 8px;
+    font-size: 12px;
+    font-family: 'Syne', sans-serif;
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+
+  .quick-btn:hover {
+    border-color: var(--accent);
+    color: var(--accent);
+    background: rgba(0,212,255,0.05);
+  }
+
+  /* Messages */
+  .msg {
+    display: flex;
+    gap: 12px;
+    animation: msgIn 0.3s ease;
+  }
+
+  @keyframes msgIn {
+    from { opacity: 0; transform: translateY(10px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  .msg.user { flex-direction: row-reverse; }
+
+  .msg-avatar {
+    width: 32px;
+    height: 32px;
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 14px;
+    flex-shrink: 0;
+    margin-top: 2px;
+  }
+
+  .msg.user .msg-avatar { background: var(--user-bg); border: 1px solid rgba(0,212,255,0.3); }
+  .msg.bot .msg-avatar { background: var(--surface2); border: 1px solid var(--border); }
+
+  .msg-bubble {
+    max-width: 72%;
+    padding: 12px 16px;
+    border-radius: 12px;
+    font-size: 14px;
+    line-height: 1.6;
+  }
+
+  .msg.user .msg-bubble {
+    background: var(--user-bg);
+    border: 1px solid rgba(0,212,255,0.2);
+    border-top-right-radius: 3px;
+    color: #cce8ef;
+  }
+
+  .msg.bot .msg-bubble {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-top-left-radius: 3px;
+    color: var(--text);
+  }
+
+  .msg-meta {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 10px;
+    color: var(--text-muted);
+    margin-top: 4px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+
+  .msg.user .msg-meta { justify-content: flex-end; }
+
+  .data-tag {
+    background: rgba(0,212,255,0.1);
+    border: 1px solid rgba(0,212,255,0.2);
+    color: var(--accent);
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 9px;
+    padding: 2px 6px;
+    border-radius: 3px;
+    display: inline-block;
+    margin-bottom: 8px;
+  }
+
+  /* Typing indicator */
+  .typing-indicator {
+    display: flex;
+    gap: 4px;
+    padding: 6px 0;
+    align-items: center;
+  }
+
+  .typing-indicator span {
+    width: 6px;
+    height: 6px;
+    background: var(--accent);
+    border-radius: 50%;
+    animation: typing 1.2s infinite;
+    opacity: 0.4;
+  }
+
+  .typing-indicator span:nth-child(2) { animation-delay: 0.2s; }
+  .typing-indicator span:nth-child(3) { animation-delay: 0.4s; }
+
+  @keyframes typing {
+    0%, 100% { opacity: 0.4; transform: scale(1); }
+    50% { opacity: 1; transform: scale(1.2); }
+  }
+
+  /* Input area */
+  #input-area {
+    position: relative;
+    z-index: 10;
+    background: var(--surface);
+    border-top: 1px solid var(--border);
+    padding: 16px 24px;
+  }
+
+  .input-row {
+    display: flex;
+    gap: 12px;
+    align-items: flex-end;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 10px 14px;
+    transition: border-color 0.2s;
+  }
+
+  .input-row:focus-within {
+    border-color: rgba(0,212,255,0.4);
+  }
+
+  #user-input {
+    flex: 1;
+    background: none;
+    border: none;
+    outline: none;
+    color: var(--text);
+    font-family: 'Syne', sans-serif;
+    font-size: 14px;
+    resize: none;
+    max-height: 120px;
+    line-height: 1.5;
+  }
+
+  #user-input::placeholder {
+    color: var(--text-muted);
+  }
+
+  #send-btn {
+    width: 36px;
+    height: 36px;
+    background: var(--accent);
+    border: none;
+    border-radius: 8px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    transition: all 0.2s;
+    color: #000;
+    font-size: 16px;
+  }
+
+  #send-btn:hover { background: #33ddff; transform: scale(1.05); }
+  #send-btn:active { transform: scale(0.95); }
+  #send-btn:disabled { background: var(--border); color: var(--text-muted); cursor: not-allowed; transform: none; }
+
+  .input-hint {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 10px;
+    color: var(--text-muted);
+    text-align: center;
+    margin-top: 8px;
+    letter-spacing: 0.05em;
+  }
+
+  /* Markdown-like formatting */
+  .msg-bubble strong { color: var(--accent); font-weight: 700; }
+  .msg-bubble em { color: var(--yellow); font-style: normal; }
+  .msg-bubble br { line-height: 2; }
+
+  @media (max-width: 600px) {
+    header { padding: 12px 16px; }
+    #stats-bar { padding: 8px 16px; }
+    #chat-area { padding: 16px; }
+    #input-area { padding: 12px 16px; }
+    .msg-bubble { max-width: 88%; font-size: 13px; }
+    .header-badges { display: none; }
+  }
+</style>
+</head>
+<body>
+
+<!-- Header -->
+<header>
+  <div class="logo-group">
+    <div class="logo-icon">⚡</div>
+    <div class="logo-text">
+      <h1>CNC ELECTRIC</h1>
+      <span>BUSINESS INTELLIGENCE</span>
+    </div>
+  </div>
+  <div class="header-badges">
+    <div class="badge live"><span class="dot"></span>LIVE</div>
+    <div class="badge shopify">SHOPIFY</div>
+    <div class="badge meta">META ADS</div>
+  </div>
+</header>
+
+<!-- Stats Bar -->
+<div id="stats-bar">
+  <div class="stat-item">
+    <span class="stat-label">7-DAY REVENUE</span>
+    <span class="stat-value accent" id="stat-revenue">—</span>
+  </div>
+  <div class="stat-divider"></div>
+  <div class="stat-item">
+    <span class="stat-label">ORDERS</span>
+    <span class="stat-value" id="stat-orders">—</span>
+  </div>
+  <div class="stat-divider"></div>
+  <div class="stat-item">
+    <span class="stat-label">AVG ORDER</span>
+    <span class="stat-value green" id="stat-aov">—</span>
+  </div>
+  <div class="stat-divider"></div>
+  <div class="stat-item">
+    <span class="stat-label">AD SPEND</span>
+    <span class="stat-value yellow" id="stat-spend">—</span>
+  </div>
+  <div class="stat-divider"></div>
+  <div class="stat-item">
+    <span class="stat-label">AD CLICKS</span>
+    <span class="stat-value" id="stat-clicks">—</span>
+  </div>
+  <div class="stat-divider"></div>
+  <div class="stat-item">
+    <span class="stat-label">CTR</span>
+    <span class="stat-value" id="stat-ctr">—</span>
+  </div>
+</div>
+
+<!-- Chat Area -->
+<div id="chat-area">
+  <div class="welcome-screen" id="welcome">
+    <div class="welcome-icon">🤖</div>
+    <div class="welcome-title">Kya jaanna chahte hain?</div>
+    <div class="welcome-sub">Shopify sales, Meta Ads performance, ya koi bhi business query — bas likh dein</div>
+    <div class="quick-prompts">
+      <button class="quick-btn" onclick="sendQuick(this)">Aaj ki sales kitni hain?</button>
+      <button class="quick-btn" onclick="sendQuick(this)">Is hafte ke top products batao</button>
+      <button class="quick-btn" onclick="sendQuick(this)">Meta ads ka ROAS kya hai?</button>
+      <button class="quick-btn" onclick="sendQuick(this)">Pending orders kitne hain?</button>
+      <button class="quick-btn" onclick="sendQuick(this)">Best performing campaign kaun sa hai?</button>
+      <button class="quick-btn" onclick="sendQuick(this)">Overall business performance summary do</button>
+    </div>
+  </div>
+</div>
+
+<!-- Input -->
+<div id="input-area">
+  <div class="input-row">
+    <textarea id="user-input" placeholder="Apni query likhein... (Urdu ya English)" rows="1"></textarea>
+    <button id="send-btn" onclick="sendMessage()">➤</button>
+  </div>
+  <div class="input-hint">ENTER to send · SHIFT+ENTER for new line</div>
+</div>
+
+<script>
+const chatArea = document.getElementById('chat-area');
+const welcome = document.getElementById('welcome');
+const input = document.getElementById('user-input');
+const sendBtn = document.getElementById('send-btn');
+let history = [];
+let statsLoaded = false;
+
+// ── Auto-resize textarea ───────────────────────────────────────────────────
+input.addEventListener('input', () => {
+  input.style.height = 'auto';
+  input.style.height = Math.min(input.scrollHeight, 120) + 'px';
+});
+
+input.addEventListener('keydown', e => {
+  if (e.key === 'Enter' && !e.shiftKey) {
+    e.preventDefault();
+    sendMessage();
+  }
+});
+
+// ── Load live stats ───────────────────────────────────────────────────────
+async function loadStats() {
+  try {
+    const res = await fetch('/api/stats');
+    const data = await res.json();
+
+    if (data.shopify) {
+      document.getElementById('stat-revenue').textContent =
+        'PKR ' + Number(data.shopify.totalRevenue).toLocaleString();
+      document.getElementById('stat-orders').textContent = data.shopify.paidOrders;
+      document.getElementById('stat-aov').textContent =
+        'PKR ' + Number(data.shopify.avgOrderValue).toLocaleString();
+    }
+    if (data.meta) {
+      document.getElementById('stat-spend').textContent =
+        data.meta.spend ? 'PKR ' + Number(data.meta.spend).toLocaleString() : '—';
+      document.getElementById('stat-clicks').textContent =
+        data.meta.clicks ? Number(data.meta.clicks).toLocaleString() : '—';
+      document.getElementById('stat-ctr').textContent =
+        data.meta.ctr ? Number(data.meta.ctr).toFixed(2) + '%' : '—';
+    }
+    statsLoaded = true;
+  } catch (e) {
+    console.log('Stats load failed:', e.message);
+  }
+}
+
+loadStats();
+
+// ── Quick prompts ─────────────────────────────────────────────────────────
+function sendQuick(btn) {
+  input.value = btn.textContent;
+  sendMessage();
+}
+
+// ── Format bot response ───────────────────────────────────────────────────
+function formatResponse(text) {
+  return text
+    .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+    .replace(/\*(.+?)\*/g, '<em>$1</em>')
+    .replace(/\n/g, '<br>');
+}
+
+// ── Send message ──────────────────────────────────────────────────────────
+async function sendMessage() {
+  const msg = input.value.trim();
+  if (!msg || sendBtn.disabled) return;
+
+  // Hide welcome
+  if (welcome) welcome.style.display = 'none';
+
+  // Add user message
+  addMessage('user', msg);
+  history.push({ role: 'user', content: msg });
+  input.value = '';
+  input.style.height = 'auto';
+  sendBtn.disabled = true;
+
+  // Typing indicator
+  const typingId = addTyping();
+
+  try {
+    const res = await fetch('/api/chat', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ message: msg, history: history.slice(-8) }),
+    });
+
+    const data = await res.json();
+    removeTyping(typingId);
+
+    if (data.error) {
+      addMessage('bot', '⚠️ Error: ' + data.error);
+    } else {
+      addMessage('bot', data.reply, data.dataFetched);
+      history.push({ role: 'assistant', content: data.reply });
+    }
+  } catch (e) {
+    removeTyping(typingId);
+    addMessage('bot', '⚠️ Server se connection fail ho gaya. Railway deploy check karein.');
+  }
+
+  sendBtn.disabled = false;
+  input.focus();
+}
+
+// ── Add message to chat ───────────────────────────────────────────────────
+function addMessage(role, text, dataFetched) {
+  const msg = document.createElement('div');
+  msg.className = `msg ${role}`;
+
+  const avatar = document.createElement('div');
+  avatar.className = 'msg-avatar';
+  avatar.textContent = role === 'user' ? '👤' : '⚡';
+
+  const bubble = document.createElement('div');
+  bubble.className = 'msg-bubble';
+
+  if (role === 'bot' && dataFetched) {
+    const tags = [];
+    if (dataFetched.shopify) tags.push('SHOPIFY DATA');
+    if (dataFetched.meta) tags.push('META ADS DATA');
+    if (tags.length) {
+      bubble.innerHTML = tags.map(t => `<span class="data-tag">📡 ${t}</span>`).join(' ') + '<br>';
+    }
+  }
+
+  if (role === 'bot') {
+    bubble.innerHTML += formatResponse(text);
+  } else {
+    bubble.textContent = text;
+  }
+
+  const meta = document.createElement('div');
+  meta.className = 'msg-meta';
+  meta.textContent = new Date().toLocaleTimeString('en-PK', { hour: '2-digit', minute: '2-digit' });
+
+  const wrapper = document.createElement('div');
+  wrapper.style.display = 'flex';
+  wrapper.style.flexDirection = 'column';
+  wrapper.appendChild(bubble);
+  wrapper.appendChild(meta);
+
+  msg.appendChild(avatar);
+  msg.appendChild(wrapper);
+  chatArea.appendChild(msg);
+  chatArea.scrollTop = chatArea.scrollHeight;
+}
+
+// ── Typing indicator ──────────────────────────────────────────────────────
+function addTyping() {
+  const id = 'typing-' + Date.now();
+  const msg = document.createElement('div');
+  msg.className = 'msg bot';
+  msg.id = id;
+  msg.innerHTML = `
+    <div class="msg-avatar">⚡</div>
+    <div class="msg-bubble">
+      <div class="typing-indicator">
+        <span></span><span></span><span></span>
+      </div>
+    </div>`;
+  chatArea.appendChild(msg);
+  chatArea.scrollTop = chatArea.scrollHeight;
+  return id;
+}
+
+function removeTyping(id) {
+  document.getElementById(id)?.remove();
+}
+</script>
+</body>
+</html>
