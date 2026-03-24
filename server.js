@@ -6,7 +6,6 @@ const cors = require('cors');
 const path = require('path');
 const crypto = require('crypto');
 
-// Shopify OAuth config
 const SHOPIFY_CLIENT_ID = process.env.SHOPIFY_CLIENT_ID;
 const SHOPIFY_CLIENT_SECRET = process.env.SHOPIFY_CLIENT_SECRET;
 const SHOPIFY_SHOP = process.env.SHOPIFY_STORE_DOMAIN || 'cncelectric.myshopify.com';
@@ -17,10 +16,15 @@ app.use(express.json());
 app.use(cors());
 app.use(express.static(path.join(__dirname, '.')));
 
-// ─── Clients ──────────────────────────────────────────────────────────────────
 const claude = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
-// ─── Shopify OAuth Routes ─────────────────────────────────────────────────────
+// ─── WhatsApp Config ──────────────────────────────────────────────────────────
+const WA_TOKEN = process.env.META_ACCESS_TOKEN;
+const WA_PHONE_ID = process.env.WA_PHONE_NUMBER_ID || '1056575127539679';
+const WA_VERIFY_TOKEN = process.env.WA_VERIFY_TOKEN || 'cnc_electric_verify_2024';
+const OWNER_PHONES = (process.env.OWNER_PHONES || '923020011194,923228064444').split(',');
+
+// ─── Shopify OAuth ────────────────────────────────────────────────────────────
 app.get('/shopify-auth', (req, res) => {
   const state = crypto.randomBytes(16).toString('hex');
   const redirectUri = `${process.env.APP_URL || 'http://localhost:3000'}/shopify-callback`;
@@ -37,21 +41,16 @@ app.get('/shopify-callback', async (req, res) => {
       code,
     });
     const token = response.data.access_token;
-    res.send(`
-      <html><body style="background:#0a0c0f;color:#00d4ff;font-family:monospace;padding:40px;">
-        <h2>✅ Shopify Token Mila!</h2>
-        <p>Yeh token Railway Variables mein lagao:</p>
-        <p><strong>SHOPIFY_ADMIN_API_KEY =</strong></p>
-        <code style="background:#111;padding:15px;display:block;border:1px solid #00d4ff;margin:10px 0;word-break:break-all;">${token}</code>
-        <p style="color:#64748b;">Token copy karo → Railway Variables mein paste karo → Redeploy!</p>
-      </body></html>
-    `);
+    res.send(`<html><body style="background:#0a0c0f;color:#00d4ff;font-family:monospace;padding:40px;">
+      <h2>✅ Shopify Token Mila!</h2>
+      <code style="background:#111;padding:15px;display:block;border:1px solid #00d4ff;margin:10px 0;word-break:break-all;">${token}</code>
+    </body></html>`);
   } catch (err) {
     res.send(`<p style="color:red;">Error: ${err.message}</p>`);
   }
 });
 
-// ─── Shopify Helpers ───────────────────────────────────────────────────────────
+// ─── Shopify Helpers ──────────────────────────────────────────────────────────
 const SHOPIFY_BASE = `https://${process.env.SHOPIFY_STORE_DOMAIN}/admin/api/2024-01`;
 const shopifyHeaders = {
   'X-Shopify-Access-Token': process.env.SHOPIFY_ADMIN_API_KEY,
@@ -73,21 +72,11 @@ async function getShopifyOrders(days = 7) {
   return res.data.orders;
 }
 
-async function getShopifyProducts() {
-  const res = await axios.get(`${SHOPIFY_BASE}/products.json`, {
-    headers: shopifyHeaders,
-    params: { limit: 250, fields: 'id,title,status,variants,product_type' },
-  });
-  return res.data.products;
-}
-
 async function getShopifySalesStats(days = 7) {
   const orders = await getShopifyOrders(days);
   const paid = orders.filter(o => o.financial_status === 'paid' || o.financial_status === 'partially_paid');
   const totalRevenue = paid.reduce((sum, o) => sum + parseFloat(o.total_price || 0), 0);
   const avgOrderValue = paid.length > 0 ? totalRevenue / paid.length : 0;
-
-  // Top products
   const productSales = {};
   for (const order of paid) {
     for (const item of order.line_items || []) {
@@ -100,7 +89,6 @@ async function getShopifySalesStats(days = 7) {
     .sort((a, b) => b[1].revenue - a[1].revenue)
     .slice(0, 5)
     .map(([name, data]) => ({ name, ...data }));
-
   return {
     period: `Last ${days} days`,
     totalOrders: orders.length,
@@ -115,9 +103,8 @@ async function getShopifySalesStats(days = 7) {
 // ─── Meta Ads Helpers ─────────────────────────────────────────────────────────
 const META_BASE = 'https://graph.facebook.com/v21.0';
 const META_TOKEN = (process.env.META_ACCESS_TOKEN || '').replace(/\s+/g, '');
-const META_AD_ACCOUNT = process.env.META_AD_ACCOUNT_ID; // format: act_XXXXXXXXXX
+const META_AD_ACCOUNT = process.env.META_AD_ACCOUNT_ID;
 
-// ✅ FIX: time_range use karo taake koi bhi number of days kaam kare
 function getTimeRange(days) {
   const today = new Date();
   const since = new Date();
@@ -143,7 +130,6 @@ async function getMetaInsights(days = 7) {
 
 async function getMetaCampaigns(days = 7) {
   const timeRange = getTimeRange(days);
-
   const res = await axios.get(`${META_BASE}/${META_AD_ACCOUNT}/campaigns`, {
     params: {
       access_token: META_TOKEN,
@@ -152,8 +138,6 @@ async function getMetaCampaigns(days = 7) {
     },
   });
   const campaigns = res.data.data || [];
-
-  // Get insights per campaign
   const insightsRes = await axios.get(`${META_BASE}/${META_AD_ACCOUNT}/insights`, {
     params: {
       access_token: META_TOKEN,
@@ -164,16 +148,12 @@ async function getMetaCampaigns(days = 7) {
     },
   });
   const insights = insightsRes.data.data || [];
-
   return { campaigns, insights };
 }
 
 // ─── Query Classifier ─────────────────────────────────────────────────────────
-// ✅ FIX: Ab koi bhi number support karta hai — "3 din", "2 days", "15 din" sab
 function classifyQuery(message) {
   const lower = message.toLowerCase();
-
-  // Pehle koi specific number dhundo
   const numMatch = lower.match(/(\d+)\s*(din|day|days)/);
   const days = numMatch
     ? parseInt(numMatch[1])
@@ -181,94 +161,190 @@ function classifyQuery(message) {
     : /kal\b|yesterday/.test(lower) ? 2
     : /week|hafta/.test(lower) ? 7
     : /month|mahina/.test(lower) ? 30
-    : 7; // default
-
+    : 7;
   return {
-    needsShopify:
-      /shopify|order|sale|revenue|product|customer|store|income|kamay|bikri|maal/.test(lower),
-    needsMeta:
-      /meta|facebook|ad|campaign|spend|roas|impression|click|marketing|advertis|paisa|budget/.test(lower),
+    needsShopify: /shopify|order|sale|revenue|product|customer|store|income|kamay|bikri|maal/.test(lower),
+    needsMeta: /meta|facebook|ad|campaign|spend|roas|impression|click|marketing|advertis|paisa|budget/.test(lower),
     days,
   };
 }
 
 // ─── System Prompt ────────────────────────────────────────────────────────────
-function buildSystemPrompt() {
-  return `You are the business intelligence assistant for CNC Electric — a Pakistan-based electrical components company selling circuit breakers, solar bundles, ATS systems, and EV chargers at cncelectric.pk.
-
-You help the business owner get instant insights from their Shopify store and Meta Ads account.
+function buildSystemPrompt(forWhatsApp = false) {
+  const base = `You are the business intelligence assistant for CNC Electric — a Pakistan-based electrical components company selling circuit breakers, solar bundles, ATS systems, and EV chargers at cncelectric.pk.
 
 IMPORTANT GUIDELINES:
 - Answer in the same language the owner writes in (Roman Urdu, Urdu, or English)
 - Be concise but insightful — give numbers AND what they mean
-- Always suggest 1-2 actionable improvements based on data
 - Format numbers clearly (PKR for currency, % for rates)
-- If data shows a problem, flag it clearly
-- If asked about something not in the data, say so honestly
+- If data shows a problem, flag it clearly`;
 
-RESPONSE FORMAT:
-- Use simple bullet points or short paragraphs
-- Bold important numbers
-- End with "💡 Suggestion:" when you have actionable advice
-- Keep responses under 300 words unless a detailed report is explicitly requested`;
+  if (forWhatsApp) {
+    return base + `
+- Plain text only — NO markdown, NO ** bold **, NO # headers
+- Use emojis for structure (📊 🛒 📱 💡)
+- Keep under 200 words
+- End with a short tip`;
+  }
+  return base + `
+- Use bullet points and formatting for web dashboard
+- Keep responses under 300 words unless detailed report requested
+- End with "💡 Suggestion:" when you have actionable advice`;
 }
 
-// ─── Main Chat Endpoint ────────────────────────────────────────────────────────
-app.post('/api/chat', async (req, res) => {
-  const { message, history = [] } = req.body;
-
-  if (!message?.trim()) {
-    return res.status(400).json({ error: 'Message required' });
+// ─── WhatsApp: Send Message ───────────────────────────────────────────────────
+async function sendWhatsAppMessage(to, text) {
+  try {
+    await axios.post(
+      `https://graph.facebook.com/v21.0/${WA_PHONE_ID}/messages`,
+      { messaging_product: 'whatsapp', to, type: 'text', text: { body: text } },
+      { headers: { Authorization: `Bearer ${WA_TOKEN}`, 'Content-Type': 'application/json' } }
+    );
+    console.log(`✅ WhatsApp sent to ${to}`);
+  } catch (err) {
+    console.error('❌ WhatsApp send error:', err.response?.data || err.message);
   }
+}
 
+// ─── WhatsApp: Handle Query ───────────────────────────────────────────────────
+async function handleWhatsAppQuery(message, from) {
   try {
     const { needsShopify, needsMeta, days } = classifyQuery(message);
-
-    // Fetch relevant data in parallel
     const dataFetches = [];
     if (needsShopify) dataFetches.push(getShopifySalesStats(days).catch(e => ({ error: e.message })));
     if (needsMeta) dataFetches.push(getMetaInsights(days).catch(e => ({ error: e.message })));
     if (needsMeta) dataFetches.push(getMetaCampaigns(days).catch(e => ({ error: e.message })));
-
     const results = await Promise.all(dataFetches);
 
     let dataContext = '';
     let idx = 0;
-    if (needsShopify) {
-      dataContext += `\n\n=== SHOPIFY DATA (${days} days) ===\n${JSON.stringify(results[idx++], null, 2)}`;
-    }
-    if (needsMeta) {
-      dataContext += `\n\n=== META ADS OVERVIEW ===\n${JSON.stringify(results[idx++], null, 2)}`;
-      dataContext += `\n\n=== META CAMPAIGNS ===\n${JSON.stringify(results[idx++], null, 2)}`;
-    }
-
-    // Build conversation history for Claude
-    const messages = [
-      ...history.slice(-10), // last 10 messages for context
-      {
-        role: 'user',
-        content: dataContext
-          ? `${message}\n\n[LIVE DATA FETCHED]${dataContext}`
-          : message,
-      },
-    ];
+    if (needsShopify) dataContext += `\nSHOPIFY (${days} days):\n${JSON.stringify(results[idx++], null, 2)}`;
+    if (needsMeta) dataContext += `\nMETA ADS:\n${JSON.stringify(results[idx++], null, 2)}`;
+    if (needsMeta) dataContext += `\nCAMPAIGNS:\n${JSON.stringify(results[idx++], null, 2)}`;
 
     const response = await claude.messages.create({
       model: 'claude-haiku-4-5-20251001',
+      max_tokens: 512,
+      system: buildSystemPrompt(true),
+      messages: [{ role: 'user', content: dataContext ? `${message}\n\n[DATA]${dataContext}` : message }],
+    });
+    await sendWhatsAppMessage(from, response.content[0].text);
+  } catch (err) {
+    console.error('WA query error:', err.message);
+    await sendWhatsAppMessage(from, '❌ Kuch masla hua, dobara try karo.');
+  }
+}
+
+// ─── Daily Auto Report ────────────────────────────────────────────────────────
+async function sendDailyReport() {
+  console.log('📊 Daily report bhej raha hun...');
+  try {
+    const [shopify, meta] = await Promise.all([
+      getShopifySalesStats(1).catch(() => null),
+      getMetaInsights(1).catch(() => null),
+    ]);
+    const today = new Date().toLocaleDateString('en-PK', {
+      timeZone: 'Asia/Karachi', day: 'numeric', month: 'short', year: 'numeric'
+    });
+    let report = `📊 CNC Electric Daily Report\n${today}\n\n`;
+    if (shopify && !shopify.error) {
+      report += `🛒 SHOPIFY\nOrders: ${shopify.totalOrders} (Paid: ${shopify.paidOrders})\nRevenue: PKR ${Number(shopify.totalRevenue).toLocaleString()}\nAvg Order: PKR ${Number(shopify.avgOrderValue).toLocaleString()}\n\n`;
+    }
+    if (meta && !meta.error) {
+      report += `📱 META ADS\nSpend: PKR ${Number(meta.spend || 0).toLocaleString()}\nClicks: ${Number(meta.clicks || 0).toLocaleString()}\nCTR: ${Number(meta.ctr || 0).toFixed(2)}%\nReach: ${Number(meta.reach || 0).toLocaleString()}\n\n`;
+    }
+    report += `💡 Kisi bhi cheez ki detail ke liye message karo!`;
+    for (const num of OWNER_PHONES) { await sendWhatsAppMessage(num, report); }
+    console.log('✅ Daily report sent!');
+  } catch (err) {
+    console.error('Daily report error:', err.message);
+  }
+}
+
+// ─── Cron: 9am Pakistan time daily ───────────────────────────────────────────
+let lastReportDate = null;
+setInterval(() => {
+  const pkTime = new Date(new Date().toLocaleString('en-US', { timeZone: 'Asia/Karachi' }));
+  const hour = pkTime.getHours();
+  const dateStr = pkTime.toDateString();
+  if (hour === 9 && lastReportDate !== dateStr) {
+    lastReportDate = dateStr;
+    sendDailyReport();
+  }
+}, 60 * 1000);
+
+// ─── WhatsApp Webhook: GET (Meta Verification) ────────────────────────────────
+app.get('/webhook', (req, res) => {
+  const mode = req.query['hub.mode'];
+  const token = req.query['hub.verify_token'];
+  const challenge = req.query['hub.challenge'];
+  console.log('Webhook verify:', { mode, token });
+  if (mode === 'subscribe' && token === WA_VERIFY_TOKEN) {
+    console.log('✅ Webhook verified!');
+    res.status(200).send(challenge);
+  } else {
+    console.log('❌ Verify failed');
+    res.status(403).send('Forbidden');
+  }
+});
+
+// ─── WhatsApp Webhook: POST (Incoming Messages) ───────────────────────────────
+app.post('/webhook', async (req, res) => {
+  res.status(200).send('OK'); // Meta ko turant 200 chahiye
+  try {
+    const body = req.body;
+    if (body.object !== 'whatsapp_business_account') return;
+    const messages = body.entry?.[0]?.changes?.[0]?.value?.messages;
+    if (!messages?.length) return;
+    const msg = messages[0];
+    const from = msg.from;
+    const text = msg.text?.body;
+    if (!text) return;
+    console.log(`📩 From ${from}: ${text}`);
+    if (!OWNER_PHONES.includes(from)) {
+      await sendWhatsAppMessage(from, 'Yeh assistant sirf CNC Electric owner ke liye hai.');
+      return;
+    }
+    await handleWhatsAppQuery(text, from);
+  } catch (err) {
+    console.error('Webhook POST error:', err.message);
+  }
+});
+
+// ─── Web Dashboard Chat ───────────────────────────────────────────────────────
+app.post('/api/chat', async (req, res) => {
+  const { message, history = [] } = req.body;
+  if (!message?.trim()) return res.status(400).json({ error: 'Message required' });
+  try {
+    const { needsShopify, needsMeta, days } = classifyQuery(message);
+    const dataFetches = [];
+    if (needsShopify) dataFetches.push(getShopifySalesStats(days).catch(e => ({ error: e.message })));
+    if (needsMeta) dataFetches.push(getMetaInsights(days).catch(e => ({ error: e.message })));
+    if (needsMeta) dataFetches.push(getMetaCampaigns(days).catch(e => ({ error: e.message })));
+    const results = await Promise.all(dataFetches);
+    let dataContext = '';
+    let idx = 0;
+    if (needsShopify) dataContext += `\n\n=== SHOPIFY DATA (${days} days) ===\n${JSON.stringify(results[idx++], null, 2)}`;
+    if (needsMeta) dataContext += `\n\n=== META ADS OVERVIEW ===\n${JSON.stringify(results[idx++], null, 2)}`;
+    if (needsMeta) dataContext += `\n\n=== META CAMPAIGNS ===\n${JSON.stringify(results[idx++], null, 2)}`;
+    const messages = [
+      ...history.slice(-10),
+      { role: 'user', content: dataContext ? `${message}\n\n[LIVE DATA FETCHED]${dataContext}` : message },
+    ];
+    const response = await claude.messages.create({
+      model: 'claude-haiku-4-5-20251001',
       max_tokens: 1024,
-      system: buildSystemPrompt(),
+      system: buildSystemPrompt(false),
       messages,
     });
-
-    const reply = response.content[0].text;
-    res.json({ reply, dataFetched: { shopify: needsShopify, meta: needsMeta } });
+    res.json({ reply: response.content[0].text, dataFetched: { shopify: needsShopify, meta: needsMeta } });
   } catch (err) {
     console.error('Chat error:', err.message);
     res.status(500).json({ error: 'Something went wrong: ' + err.message });
   }
 });
 
-// ─── Quick Stats Endpoint (for dashboard) ─────────────────────────────────────
+// ─── Stats + Utility Endpoints ────────────────────────────────────────────────
 app.get('/api/stats', async (req, res) => {
   try {
     const [shopify, meta] = await Promise.all([
@@ -281,9 +357,13 @@ app.get('/api/stats', async (req, res) => {
   }
 });
 
-// ─── Health Check ─────────────────────────────────────────────────────────────
+// Manual report trigger — test ke liye
+app.get('/send-report', async (req, res) => {
+  await sendDailyReport();
+  res.json({ status: 'Report bhej di!' });
+});
+
 app.get('/health', (req, res) => res.json({ status: 'ok', time: new Date().toISOString() }));
 
-// ─── Start ────────────────────────────────────────────────────────────────────
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => console.log(`CNC Electric Assistant running on port ${PORT}`));
