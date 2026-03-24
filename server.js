@@ -15,7 +15,7 @@ const SCOPES = 'read_orders,write_orders,read_products,write_products,read_custo
 const app = express();
 app.use(express.json());
 app.use(cors());
-app.use(express.static(path.join(__dirname, 'public')));
+app.use(express.static(path.join(__dirname, '.')));
 
 // ─── Clients ──────────────────────────────────────────────────────────────────
 const claude = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
