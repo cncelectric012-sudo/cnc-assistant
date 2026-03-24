@@ -117,11 +117,23 @@ const META_BASE = 'https://graph.facebook.com/v21.0';
 const META_TOKEN = (process.env.META_ACCESS_TOKEN || '').replace(/\s+/g, '');
 const META_AD_ACCOUNT = process.env.META_AD_ACCOUNT_ID; // format: act_XXXXXXXXXX
 
+// ✅ FIX: time_range use karo taake koi bhi number of days kaam kare
+function getTimeRange(days) {
+  const today = new Date();
+  const since = new Date();
+  since.setDate(today.getDate() - (days - 1));
+  return {
+    since: since.toISOString().split('T')[0],
+    until: today.toISOString().split('T')[0],
+  };
+}
+
 async function getMetaInsights(days = 7) {
+  const timeRange = getTimeRange(days);
   const res = await axios.get(`${META_BASE}/${META_AD_ACCOUNT}/insights`, {
     params: {
       access_token: META_TOKEN,
-      date_preset: days <= 7 ? 'last_7d' : days <= 30 ? 'last_30d' : 'last_90d',
+      time_range: JSON.stringify(timeRange),
       fields: 'spend,impressions,clicks,ctr,cpc,reach,actions,action_values',
       level: 'account',
     },
@@ -130,6 +142,8 @@ async function getMetaInsights(days = 7) {
 }
 
 async function getMetaCampaigns(days = 7) {
+  const timeRange = getTimeRange(days);
+
   const res = await axios.get(`${META_BASE}/${META_AD_ACCOUNT}/campaigns`, {
     params: {
       access_token: META_TOKEN,
@@ -143,8 +157,8 @@ async function getMetaCampaigns(days = 7) {
   const insightsRes = await axios.get(`${META_BASE}/${META_AD_ACCOUNT}/insights`, {
     params: {
       access_token: META_TOKEN,
-      date_preset: days <= 7 ? 'last_7d' : 'last_30d',
-      fields: 'campaign_name,spend,impressions,clicks,ctr,actions,roas',
+      time_range: JSON.stringify(timeRange),
+      fields: 'campaign_name,spend,impressions,clicks,ctr,actions',
       level: 'campaign',
       limit: 20,
     },
@@ -155,22 +169,26 @@ async function getMetaCampaigns(days = 7) {
 }
 
 // ─── Query Classifier ─────────────────────────────────────────────────────────
+// ✅ FIX: Ab koi bhi number support karta hai — "3 din", "2 days", "15 din" sab
 function classifyQuery(message) {
   const lower = message.toLowerCase();
+
+  // Pehle koi specific number dhundo
+  const numMatch = lower.match(/(\d+)\s*(din|day|days)/);
+  const days = numMatch
+    ? parseInt(numMatch[1])
+    : /aaj|today/.test(lower) ? 1
+    : /kal\b|yesterday/.test(lower) ? 2
+    : /week|hafta/.test(lower) ? 7
+    : /month|mahina/.test(lower) ? 30
+    : 7; // default
+
   return {
     needsShopify:
-      /shopify|order|sale|revenue|product|customer|store|income|kamay|bikri|order|maal/.test(lower),
+      /shopify|order|sale|revenue|product|customer|store|income|kamay|bikri|maal/.test(lower),
     needsMeta:
-      /meta|facebook|ad|campaign|spend|roas|impression|click|marketing|advertis|paisa|budget/.test(
-        lower
-      ),
-    days: /aaj|today|kal|yesterday/.test(lower)
-      ? 1
-      : /week|hafta|7/.test(lower)
-      ? 7
-      : /month|mahina|30/.test(lower)
-      ? 30
-      : 7,
+      /meta|facebook|ad|campaign|spend|roas|impression|click|marketing|advertis|paisa|budget/.test(lower),
+    days,
   };
 }
 
