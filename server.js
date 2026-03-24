@@ -114,7 +114,7 @@ async function getShopifySalesStats(days = 7) {
 
 // ─── Meta Ads Helpers ─────────────────────────────────────────────────────────
 const META_BASE = 'https://graph.facebook.com/v21.0';
-const META_TOKEN = process.env.META_ACCESS_TOKEN;
+const META_TOKEN = (process.env.META_ACCESS_TOKEN || '').replace(/\s+/g, '');
 const META_AD_ACCOUNT = process.env.META_AD_ACCOUNT_ID; // format: act_XXXXXXXXXX
 
 async function getMetaInsights(days = 7) {
