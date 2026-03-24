@@ -7,10 +7,10 @@ const path = require('path');
 const crypto = require('crypto');
 
 // Shopify OAuth config
-const SHOPIFY_CLIENT_ID = process.env.SHOPIFY_CLIENT_ID || '3982062fe4ecec6bd5b2f55820e4135';
-const SHOPIFY_CLIENT_SECRET = process.env.SHOPIFY_CLIENT_SECRET || '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';
+const SHOPIFY_CLIENT_ID = process.env.SHOPIFY_CLIENT_ID;
+const SHOPIFY_CLIENT_SECRET = process.env.SHOPIFY_CLIENT_SECRET;
 const SHOPIFY_SHOP = process.env.SHOPIFY_STORE_DOMAIN || 'cncelectric.myshopify.com';
-const SCOPES = 'read_orders,read_products,read_customers,read_analytics';
+const SCOPES = 'read_orders,write_orders,read_products,write_products,read_customers,write_customers,read_analytics,read_inventory,write_inventory,read_fulfillments,read_shipping,read_reports,read_price_rules,read_discounts';
 
 const app = express();
 app.use(express.json());
