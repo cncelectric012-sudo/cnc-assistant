@@ -4,6 +4,13 @@ const Anthropic = require('@anthropic-ai/sdk');
 const axios = require('axios');
 const cors = require('cors');
 const path = require('path');
+const crypto = require('crypto');
+
+// Shopify OAuth config
+const SHOPIFY_CLIENT_ID = process.env.SHOPIFY_CLIENT_ID || '3982062fe4ecec6bd5b2f55820e4135';
+const SHOPIFY_CLIENT_SECRET = process.env.SHOPIFY_CLIENT_SECRET || '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';
+const SHOPIFY_SHOP = process.env.SHOPIFY_STORE_DOMAIN || 'cncelectric.myshopify.com';
+const SCOPES = 'read_orders,read_products,read_customers,read_analytics';
 
 const app = express();
 app.use(express.json());
@@ -12,6 +19,37 @@ app.use(express.static(path.join(__dirname, 'public')));
 
 // ─── Clients ──────────────────────────────────────────────────────────────────
 const claude = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+
+// ─── Shopify OAuth Routes ─────────────────────────────────────────────────────
+app.get('/shopify-auth', (req, res) => {
+  const state = crypto.randomBytes(16).toString('hex');
+  const redirectUri = `${process.env.APP_URL || 'http://localhost:3000'}/shopify-callback`;
+  const authUrl = `https://${SHOPIFY_SHOP}/admin/oauth/authorize?client_id=${SHOPIFY_CLIENT_ID}&scope=${SCOPES}&redirect_uri=${redirectUri}&state=${state}`;
+  res.redirect(authUrl);
+});
+
+app.get('/shopify-callback', async (req, res) => {
+  const { code } = req.query;
+  try {
+    const response = await axios.post(`https://${SHOPIFY_SHOP}/admin/oauth/access_token`, {
+      client_id: SHOPIFY_CLIENT_ID,
+      client_secret: SHOPIFY_CLIENT_SECRET,
+      code,
+    });
+    const token = response.data.access_token;
+    res.send(`
+      <html><body style="background:#0a0c0f;color:#00d4ff;font-family:monospace;padding:40px;">
+        <h2>✅ Shopify Token Mila!</h2>
+        <p>Yeh token Railway Variables mein lagao:</p>
+        <p><strong>SHOPIFY_ADMIN_API_KEY =</strong></p>
+        <code style="background:#111;padding:15px;display:block;border:1px solid #00d4ff;margin:10px 0;word-break:break-all;">${token}</code>
+        <p style="color:#64748b;">Token copy karo → Railway Variables mein paste karo → Redeploy!</p>
+      </body></html>
+    `);
+  } catch (err) {
+    res.send(`<p style="color:red;">Error: ${err.message}</p>`);
+  }
+});
 
 // ─── Shopify Helpers ───────────────────────────────────────────────────────────
 const SHOPIFY_BASE = `https://${process.env.SHOPIFY_STORE_DOMAIN}/admin/api/2024-01`;
