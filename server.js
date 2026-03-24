@@ -122,7 +122,7 @@ async function getMetaInsights(days = 7) {
     params: {
       access_token: META_TOKEN,
       date_preset: days <= 7 ? 'last_7d' : days <= 30 ? 'last_30d' : 'last_90d',
-      fields: 'spend,impressions,clicks,ctr,cpc,reach,actions,action_values,roas',
+      fields: 'spend,impressions,clicks,ctr,cpc,reach,actions,action_values',
       level: 'account',
     },
   });
