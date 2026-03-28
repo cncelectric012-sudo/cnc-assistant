@@ -9,7 +9,7 @@ const crypto = require('crypto');
 const SHOPIFY_CLIENT_ID = process.env.SHOPIFY_CLIENT_ID;
 const SHOPIFY_CLIENT_SECRET = process.env.SHOPIFY_CLIENT_SECRET;
 const SHOPIFY_SHOP = process.env.SHOPIFY_STORE_DOMAIN || 'cncelectric.myshopify.com';
-const SCOPES = 'read_orders,write_orders,read_products,write_products,read_customers,write_customers,read_analytics,read_inventory,write_inventory,read_fulfillments,read_shipping,read_reports,read_price_rules,read_discounts,read_themes,write_themes';
+const SCOPES = 'read_analytics,read_customers,write_customers,read_price_rules,read_discounts,write_draft_orders,read_draft_orders,read_fulfillments,write_fulfillments,read_inventory,write_inventory,read_marketing_events,read_orders,write_orders,read_products,write_products,read_reports,read_shipping,read_themes,write_themes,read_online_store_navigation,write_online_store_navigation,read_online_store_pages,write_online_store_pages,read_metaobjects,write_metaobjects,read_content,write_content,read_locales,write_locales';
 
 const app = express();
 app.use(express.json());
